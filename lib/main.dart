@@ -17,11 +17,20 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  List<Point> points = [];
+  final GlobalKey<TooltipState> tooltipKey = GlobalKey<TooltipState>();
 
+  List<Point> points = [];
   int pointsIndex = 0;
+
   List<Point> displayPoints = [];
   Timer? timer;
+
+  double axisMin = 0;
+  double axisMax = 0;
+
+  ChartSeriesController? controller;
+
+  bool over = true;
 
   Future<void> loadFile() async {
     final typeGroup = XTypeGroup(
@@ -38,10 +47,12 @@ class _HomeState extends State<Home> {
 
       List<List<dynamic>> rows = Csv().decode(content);
 
+      timer?.cancel();
+      controller = null;
+
       setState(() {
         points.clear();
         displayPoints.clear();
-        timer?.cancel();
 
         for (int i = 1; i < rows.length; i++) {
           if (rows[i].length < 2) continue;
@@ -53,38 +64,72 @@ class _HomeState extends State<Home> {
             ),
           );
         }
+
+        startSimulation();
       });
     }
   }
 
   void startSimulation() {
-    if (points.isEmpty == true) {
+    if (points.isEmpty) {
       return;
     }
 
+    over = false;
     pointsIndex = 0;
     displayPoints.clear();
     timer?.cancel();
+    controller = null;
 
-    timer = Timer.periodic(Duration(milliseconds: 30), (t) {
-      setState(() {
-        if (pointsIndex < points.length) {
-          displayPoints.add(points[pointsIndex]);
-          pointsIndex++;
+    timer = Timer.periodic(Duration(milliseconds: 20), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
 
-          if (displayPoints.length > 40) {
-            displayPoints.removeAt(0);
-          }
+      if (pointsIndex < points.length) {
+        displayPoints.add(points[pointsIndex]);
+
+        if (displayPoints.length > 100) {
+          displayPoints.removeAt(0);
+          controller?.updateDataSource(
+            addedDataIndexes: <int>[displayPoints.length - 1],
+            removedDataIndexes: <int>[0],
+          );
         } else {
-          timer?.cancel();
+          controller?.updateDataSource(
+            addedDataIndexes: <int>[displayPoints.length - 1],
+          );
         }
-      });
+
+        axisMin = displayPoints.first.x;
+        axisMax = displayPoints.last.x;
+
+        pointsIndex++;
+
+        setState(() {});
+      } else {
+        timer?.cancel();
+        setState(() {
+          over = true;
+        });
+      }
+    });
+  }
+
+  void cancelSimulation() {
+    timer?.cancel();
+    controller = null;
+    setState(() {
+      over = true;
+      displayPoints.clear();
     });
   }
 
   @override
   void dispose() {
     timer?.cancel();
+    controller = null;
     super.dispose();
   }
 
@@ -111,45 +156,54 @@ class _HomeState extends State<Home> {
       ),
       backgroundColor: Colors.grey[800],
       body: Padding(
-        padding: EdgeInsets.fromLTRB(20, 80, 20, 50),
+        padding: EdgeInsets.fromLTRB(20, 50, 20, 50),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton(
-                onPressed: loadFile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[700],
-                ),
-                child: Text(
-                  "Upload File",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontFamily: 'Poppins',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: over ? loadFile : cancelSimulation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[700],
+                    ),
+                    child: Text(
+                      over ? "Upload File" : "Cancel",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: startSimulation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[700],
-                ),
-                child: Text(
-                  "Start",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontFamily: 'Poppins',
+                  SizedBox(width: 15),
+                  Tooltip(
+                    key: tooltipKey,
+                    triggerMode: TooltipTriggerMode.manual,
+                    message:
+                        "Chosen file must be a CSV file with two columns. The first column is the x value and the second column is the y value.",
+                    child: IconButton(
+                      onPressed: () {
+                        tooltipKey.currentState?.ensureTooltipVisible();
+                      },
+                      icon: Icon(
+                        Icons.info_outline,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-              SizedBox(height: 40),
+              SizedBox(height: 20),
               Expanded(
                 child: displayPoints.isEmpty
                     ? Center(
                         child: Text(
-                          points.isEmpty ? "No File Loaded" : "Press Start",
+                          "No File Loaded",
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -159,9 +213,16 @@ class _HomeState extends State<Home> {
                         ),
                       )
                     : Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 40, 0),
+                        padding: EdgeInsets.fromLTRB(0, 0, 40, 0),
                         child: SfCartesianChart(
-                          primaryXAxis: const NumericAxis(
+                          key: ValueKey(
+                            pointsIndex > 0 && displayPoints.length <= 1
+                                ? DateTime.now()
+                                : 'chart',
+                          ),
+                          primaryXAxis: NumericAxis(
+                            minimum: axisMin,
+                            maximum: axisMax,
                             title: AxisTitle(
                               text: "Time (s)",
                               textStyle: TextStyle(
@@ -178,7 +239,7 @@ class _HomeState extends State<Home> {
                           primaryYAxis: const NumericAxis(
                             minimum: -2.0,
                             maximum: 4.0,
-                            interval: 1,
+                            interval: 2,
                             title: AxisTitle(
                               text: "Value",
                               textStyle: TextStyle(
@@ -195,6 +256,9 @@ class _HomeState extends State<Home> {
                           series: <CartesianSeries<Point, double>>[
                             LineSeries<Point, double>(
                               animationDuration: 0,
+                              onRendererCreated: (ChartSeriesController c) {
+                                controller = c;
+                              },
                               dataSource: displayPoints,
                               xValueMapper: (Point data, _) => data.x,
                               yValueMapper: (Point data, _) => data.y,
