@@ -1,8 +1,4 @@
-
-# Live Plotter
-
-
-![LivePlotter](GIF)
+![LivePlotter](/app.gif)
 
 **Live Plotter** allows users to upload custom **CSV** files and watch their data get rendered dynamically as a rolling time-series chart.
 
