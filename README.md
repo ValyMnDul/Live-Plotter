@@ -8,7 +8,11 @@
 
 ## How to use
 
-
+1. Go to the **[Releases](../../releases)** tab on GitHub.
+2. Download the appropriate package for your device:
+    - **Android:** Download and install the `.apk` file.
+    - **iOS:** Download the `.ipa` file
+3. Open the app, upload a sample CSV file, and watch.
 
 ## CSV File Format
 
@@ -23,7 +27,7 @@ To ensure smooth parsing, make sure your CSV file follows this simple structure:
 ### Example CSV
 
 ```csv
-time,value
+x,y
 0.0, 1.25
 0.1, 1.80
 0.2, 2.10
